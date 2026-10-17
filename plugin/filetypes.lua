@@ -6,6 +6,15 @@ end
 
 -- Extensions that Neovim does not detect natively.
 
+-- Lines of a buffer; none when Neovim matches a filename alone (bufnr -1).
+local function buf_lines(bufnr, last)
+    return bufnr >= 0 and vim.api.nvim_buf_get_lines(bufnr, 0, last, false) or {}
+end
+
+-- The pattern that stops a scan inside a string literal opened by the key:
+-- its closing quote or a backslash escape.
+local STRING_STOP = { ['"'] = '[\\"]', ["'"] = "[\\']", ["`"] = "[\\`]" }
+
 -- Whether a tag opener ({%, {{, {#) appears outside strings and comments,
 -- where a ucode script cannot have one.
 local function has_code_position_tag(text)
@@ -34,7 +43,7 @@ local function has_code_position_tag(text)
         else
             local j = i + 1
             while true do
-                j = text:find("[\\" .. c .. "]", j)
+                j = text:find(STRING_STOP[c], j)
                 if not j then
                     return false
                 elseif text:sub(j, j) == "\\" then
@@ -52,7 +61,7 @@ end
 -- itself does, a #! line picks the mode first: utpl or -T is a template, -R a
 -- script. Otherwise the content decides.
 local function ucode_or_markup(_, bufnr)
-    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    local lines = buf_lines(bufnr, -1)
     local first = lines[1] or ""
     if first:sub(1, 2) == "#!" then
         if first:find("utpl", 1, true) or first:find("-T", 1, true) then
@@ -92,7 +101,7 @@ vim.filetype.add({
         -- An extensionless file whose #! line runs ucode or utpl.
         [".*"] = {
             function(path, bufnr)
-                local prog = shebang_program(vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or "")
+                local prog = shebang_program(buf_lines(bufnr, 1)[1] or "")
                 if prog == "ucode" or prog == "utpl" then
                     return ucode_or_markup(path, bufnr)
                 end
