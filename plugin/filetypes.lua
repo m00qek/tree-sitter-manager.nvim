@@ -5,20 +5,34 @@ for lang, ft in pairs(filetypes) do
 end
 
 -- Extensions that Neovim does not detect natively.
+-- .uc and .ucode hold both ucode scripts and ucode_markup templates: a file
+-- is a template when a line starts with a tag opener ({%, {{, {#).
+local function ucode_or_markup(_, bufnr)
+    for _, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
+        if line:match("^%s*{[%%{#]") then
+            return "ucode_markup"
+        end
+    end
+    return "ucode"
+end
+
 vim.filetype.add({
     extension = {
-        -- .uc is used by both ucode (plain code) and ucode_tmpl (templates).
-        -- Detect by content: if any line starts with a template tag opener
-        -- ({%, {{, {#) the file is a template, otherwise plain ucode.
-        uc = function(path, bufnr)
-            local lines = vim.api.nvim_buf_get_lines(bufnr, 0, 100, false)
-            for _, line in ipairs(lines) do
-                if line:match("^%s*{[%%{#]") then
-                    return "ucode_tmpl"
+        uc = ucode_or_markup,
+        ucode = ucode_or_markup,
+        ut = "ucode_markup",
+        utpl = "ucode_markup",
+    },
+    pattern = {
+        -- An extensionless script whose #! line names ucode.
+        [".*"] = {
+            function(_, bufnr)
+                local first = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
+                if first:match("^#!.*%f[%w]ucode%f[%W]") then
+                    return "ucode"
                 end
-            end
-            return "ucode"
-        end,
-        utpl = "ucode_tmpl",
+            end,
+            { priority = -math.huge },
+        },
     },
 })
